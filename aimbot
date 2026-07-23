@@ -1,0 +1,95 @@
+-- =============================================
+-- AIMBOT - Auto Mira no Murderer (Sheriff/Hero)
+-- =============================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+local Aimbot = {}
+local enabled = false
+local connection = nil
+
+local function getHRP(player)
+    if player and player.Character then
+        return player.Character:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
+local function findMurderer()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local char = plr.Character
+            local bp = plr:FindFirstChild("Backpack")
+            if (char and char:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife")) then
+                return plr
+            end
+        end
+    end
+    return nil
+end
+
+local function isSheriffOrHero()
+    local char = LocalPlayer.Character
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    
+    if char then
+        if char:FindFirstChild("Gun") then return true end
+    end
+    if bp then
+        if bp:FindFirstChild("Gun") then return true end
+    end
+    return false
+end
+
+local function aimAt(target)
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+    
+    local targetRoot = getHRP(target)
+    if not targetRoot then return end
+    
+    -- Mira suave
+    local myRoot = myChar.HumanoidRootPart
+    local direction = (targetRoot.Position - myRoot.Position).Unit
+    myRoot.CFrame = CFrame.new(myRoot.Position, myRoot.Position + direction)
+end
+
+function Aimbot.Toggle(state)
+    enabled = state
+    
+    if enabled then
+        print("🎯 Aimbot Ativado (Auto mira no Murderer)")
+        
+        connection = RunService.RenderStepped:Connect(function()
+            if not enabled then return end
+            
+            if isSheriffOrHero() then
+                local murderer = findMurderer()
+                if murderer then
+                    aimAt(murderer)
+                end
+            end
+        end)
+        
+    else
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+        print("🎯 Aimbot Desativado")
+    end
+end
+
+-- Mira manual (para teste)
+function Aimbot.AimAtMurderer()
+    local murderer = findMurderer()
+    if murderer then
+        aimAt(murderer)
+    end
+end
+
+return Aimbot
