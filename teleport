@@ -1,0 +1,105 @@
+-- =============================================
+-- TELEPORT COM LISTA DE PLAYERS
+-- =============================================
+
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+local Teleport = {}
+
+local function getHRP(player)
+    if player and player.Character then
+        return player.Character:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
+local function teleportTo(target, height)
+    height = height or 4
+    local myRoot = getHRP(LocalPlayer)
+    local targetRoot = getHRP(target)
+    
+    if myRoot and targetRoot then
+        myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, height, 0)
+        print("🚀 Teleportado para: " .. target.Name)
+        return true
+    end
+    return false
+end
+
+-- ==================== LISTA DE PLAYERS ====================
+
+function Teleport.GetPlayerList()
+    local list = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr \~= LocalPlayer then
+            table.insert(list, plr.Name)
+        end
+    end
+    return list
+end
+
+-- Teleporta pelo nome exato
+function Teleport.ToPlayer(name)
+    local target = Players:FindFirstChild(name)
+    if target then
+        teleportTo(target, 4)
+    else
+        print("❌ Jogador não encontrado: " .. name)
+    end
+end
+
+-- ==================== TELEPORT RÁPIDO ====================
+
+function Teleport.ToMurderer()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local char = plr.Character
+            local bp = plr:FindFirstChild("Backpack")
+            if (char and char:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife")) then
+                teleportTo(plr, 4)
+                return
+            end
+        end
+    end
+    print("❌ Nenhum Murderer encontrado")
+end
+
+function Teleport.ToSheriff()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local char = plr.Character
+            local bp = plr:FindFirstChild("Backpack")
+            if (char and char:FindFirstChild("Gun")) or (bp and bp:FindFirstChild("Gun")) then
+                teleportTo(plr, 4)
+                return
+            end
+        end
+    end
+    print("❌ Nenhum Sheriff encontrado")
+end
+
+function Teleport.ToNearest()
+    local myRoot = getHRP(LocalPlayer)
+    if not myRoot then return end
+    
+    local nearest, shortest = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local root = getHRP(plr)
+            if root then
+                local dist = (myRoot.Position - root.Position).Magnitude
+                if dist < shortest then
+                    shortest = dist
+                    nearest = plr
+                end
+            end
+        end
+    end
+    if nearest then
+        teleportTo(nearest, 3)
+    end
+end
+
+return Teleport
