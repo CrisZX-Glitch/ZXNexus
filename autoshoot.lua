@@ -13,7 +13,7 @@ local connection = nil
 
 local function findMurderer()
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr \~= LocalPlayer then
+        if plr ~= LocalPlayer then
             local char = plr.Character
             local backpack = plr:FindFirstChild("Backpack")
             
