@@ -1,0 +1,142 @@
+-- =============================================
+-- FLING - MM2 (Fling Murderer / Sheriff / Nearest)
+-- =============================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local Fling = {}
+local enabled = false
+local flingTarget = "Murderer"  -- Murderer, Sheriff, Nearest
+local flingConnection = nil
+
+local function getHRP(player)
+    if player and player.Character then
+        return player.Character:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
+local function findMurderer()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local char = plr.Character
+            local bp = plr:FindFirstChild("Backpack")
+            if (char and char:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife")) then
+                return plr
+            end
+        end
+    end
+    return nil
+end
+
+local function findSheriff()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local char = plr.Character
+            local bp = plr:FindFirstChild("Backpack")
+            if (char and char:FindFirstChild("Gun")) or (bp and bp:FindFirstChild("Gun")) then
+                return plr
+            end
+        end
+    end
+    return nil
+end
+
+local function findNearestPlayer()
+    local myRoot = getHRP(LocalPlayer)
+    if not myRoot then return nil end
+    
+    local nearest, shortest = nil, math.huge
+    
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local root = getHRP(plr)
+            if root then
+                local dist = (myRoot.Position - root.Position).Magnitude
+                if dist < shortest and dist < 300 then
+                    shortest = dist
+                    nearest = plr
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+local function flingPlayer(target)
+    if not target or not target.Character then return end
+    
+    local targetRoot = getHRP(target)
+    if not targetRoot then return end
+    
+    -- Fling forte
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "FlingVelocity"
+    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bv.Velocity = targetRoot.CFrame.LookVector * 250 + Vector3.new(0, 120, 0)
+    bv.Parent = targetRoot
+    
+    game.Debris:AddItem(bv, 2.5)
+    
+    -- Extra spin
+    local angular = Instance.new("BodyAngularVelocity")
+    angular.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    angular.AngularVelocity = Vector3.new(0, 100, 0)
+    angular.Parent = targetRoot
+    game.Debris:AddItem(angular, 2)
+end
+
+function Fling.Toggle(state, targetType)
+    enabled = state
+    flingTarget = targetType or "Murderer"
+    
+    if enabled then
+        print("💥 Fling Ativado | Alvo: " .. flingTarget)
+        
+        flingConnection = RunService.Heartbeat:Connect(function()
+            if not enabled then return end
+            
+            local target = nil
+            if flingTarget == "Murderer" then
+                target = findMurderer()
+            elseif flingTarget == "Sheriff" then
+                target = findSheriff()
+            elseif flingTarget == "Nearest" then
+                target = findNearestPlayer()
+            end
+            
+            if target then
+                flingPlayer(target)
+                task.wait(1.2)  -- cooldown para não spammar
+            end
+        end)
+        
+    else
+        if flingConnection then
+            flingConnection:Disconnect()
+            flingConnection = nil
+        end
+        print("💥 Fling Desativado")
+    end
+end
+
+-- Funções rápidas
+function Fling.FlingMurderer()
+    local mur = findMurderer()
+    if mur then flingPlayer(mur) end
+end
+
+function Fling.FlingSheriff()
+    local sheriff = findSheriff()
+    if sheriff then flingPlayer(sheriff) end
+end
+
+function Fling.FlingNearest()
+    local nearest = findNearestPlayer()
+    if nearest then flingPlayer(nearest) end
+end
+
+return Fling
