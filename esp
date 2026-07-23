@@ -1,5 +1,5 @@
 -- =============================================
--- ESP + TRACERS + HIGHLIGHTS - MM2
+-- ESP COMPLETO - Murderer / Hero / Sheriff / Innocent
 -- =============================================
 
 local Players = game:GetService("Players")
@@ -10,18 +10,23 @@ local LocalPlayer = Players.LocalPlayer
 
 local ESP = {}
 
-local enabled = {
-    Names = false,
-    Tracers = false,
-    Highlights = false,
+-- Configurações separadas por role
+local settings = {
+    Enabled = true,
+    Murderer = { Name = true, Tracer = true, Highlight = true },
+    Sheriff = { Name = true, Tracer = true, Highlight = true },
+    Hero = { Name = true, Tracer = true, Highlight = true },
+    Innocent = { Name = true, Tracer = true, Highlight = true },
 }
 
-local drawings = {}
-local highlights = {}
-local connections = {}
+local drawings = {}      -- Tracers
+local highlights = {}    -- Highlights
+local billboards = {}    -- Names
 
+-- ==================== DETECÇÃO DE ROLE ====================
 local function getPlayerRole(player)
-    -- Simples detecção por tool (funciona bem na maioria dos servers)
+    if not player or not player.Character then return "Innocent" end
+    
     local char = player.Character
     local bp = player:FindFirstChild("Backpack")
     
@@ -36,11 +41,11 @@ local function getPlayerRole(player)
     return "Innocent"
 end
 
+-- ==================== TRACERS ====================
 local function createTracer(player)
     if drawings[player] then return end
-    
     local tracer = Drawing.new("Line")
-    tracer.Thickness = 1.8
+    tracer.Thickness = 2
     tracer.Transparency = 1
     tracer.Visible = false
     drawings[player] = tracer
@@ -49,22 +54,23 @@ end
 local function updateTracers()
     for player, tracer in pairs(drawings) do
         if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local role = getPlayerRole(player)
+            local shouldShow = settings.Enabled and settings[role] and settings[role].Tracer
+            
             local root = player.Character.HumanoidRootPart
             local camera = Workspace.CurrentCamera
             local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
             
-            if onScreen then
-                local color = Color3.fromRGB(255, 0, 0)
-                local role = getPlayerRole(player)
-                
-                if role == "Murderer" then color = Color3.fromRGB(255, 0, 0)
-                elseif role == "Sheriff" then color = Color3.fromRGB(0, 100, 255)
-                else color = Color3.fromRGB(0, 255, 100) end
+            if onScreen and shouldShow then
+                local color = role == "Murderer" and Color3.fromRGB(255, 0, 0)
+                         or role == "Sheriff" and Color3.fromRGB(0, 100, 255)
+                         or role == "Hero" and Color3.fromRGB(255, 255, 0)
+                         or Color3.fromRGB(0, 255, 100)
                 
                 tracer.Color = color
                 tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
                 tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-                tracer.Visible = enabled.Tracers
+                tracer.Visible = true
             else
                 tracer.Visible = false
             end
@@ -77,97 +83,79 @@ local function updateTracers()
     end
 end
 
-local function createHighlight(player)
-    if highlights[player] then return end
-    
-    local char = player.Character
-    if not char then return end
-    
-    local highlight = Instance.new("Highlight")
-    highlight.Adornee = char
-    highlight.FillTransparency = 0.7
-    highlight.OutlineTransparency = 0.3
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = char
-    highlights[player] = highlight
-end
-
+-- ==================== HIGHLIGHTS ====================
 local function updateHighlights()
-    for player, hl in pairs(highlights) do
-        if player and player.Character then
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
             local role = getPlayerRole(player)
-            if role == "Murderer" then
-                hl.FillColor = Color3.fromRGB(255, 50, 50)
-            elseif role == "Sheriff" then
-                hl.FillColor = Color3.fromRGB(50, 100, 255)
+            local shouldShow = settings.Enabled and settings[role] and settings[role].Highlight
+            
+            local highlight = player.Character:FindFirstChild("ESP_Highlight")
+            
+            if shouldShow then
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "ESP_Highlight"
+                    highlight.Adornee = player.Character
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.FillTransparency = 0.65
+                    highlight.OutlineTransparency = 0.3
+                    highlight.Parent = player.Character
+                end
+                
+                if role == "Murderer" then
+                    highlight.FillColor = Color3.fromRGB(255, 60, 60)
+                elseif role == "Sheriff" then
+                    highlight.FillColor = Color3.fromRGB(60, 120, 255)
+                elseif role == "Hero" then
+                    highlight.FillColor = Color3.fromRGB(255, 255, 80)
+                else
+                    highlight.FillColor = Color3.fromRGB(80, 255, 120)
+                end
             else
-                hl.FillColor = Color3.fromRGB(50, 255, 100)
+                if highlight then highlight:Destroy() end
             end
-            hl.Enabled = enabled.Highlights
         end
     end
 end
 
 -- ==================== CONTROLE ====================
-
-function ESP.ToggleNames(state)
-    enabled.Names = state
-    -- (pode adicionar BillboardGui depois se quiser)
+function ESP.Toggle(state)
+    settings.Enabled = state
 end
 
-function ESP.ToggleTracers(state)
-    enabled.Tracers = state
-end
-
-function ESP.ToggleHighlights(state)
-    enabled.Highlights = state
+function ESP.ToggleRole(role, name, tracer, highlight)
+    if settings[role] then
+        settings[role].Name = name
+        settings[role].Tracer = tracer
+        settings[role].Highlight = highlight
+    end
 end
 
 function ESP.Start()
     -- Limpa antigo
-    for _, conn in pairs(connections) do conn:Disconnect() end
-    connections = {}
+    for _, v in pairs(drawings) do if v then v:Remove() end end
+    drawings = {}
     
-    -- Tracers
-    table.insert(connections, RunService.RenderStepped:Connect(updateTracers))
+    -- Inicia loops
+    RunService.RenderStepped:Connect(updateTracers)
+    RunService.Heartbeat:Connect(updateHighlights)
     
-    -- Highlights
-    table.insert(connections, RunService.Heartbeat:Connect(updateHighlights))
-    
-    -- Cria para jogadores existentes
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player \~= LocalPlayer then
-            createTracer(player)
-            createHighlight(player)
+    -- Cria tracers para jogadores atuais
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            createTracer(plr)
         end
     end
     
     -- Novo jogador
-    Players.PlayerAdded:Connect(function(player)
-        if player ~= LocalPlayer then
-            createTracer(player)
-            createHighlight(player)
+    Players.PlayerAdded:Connect(function(plr)
+        if plr ~= LocalPlayer then
+            createTracer(plr)
         end
     end)
     
-    print("👁️ ESP System Iniciado")
-end
-
-function ESP.Stop()
-    for _, conn in pairs(connections) do conn:Disconnect() end
-    connections = {}
-    
-    for _, tracer in pairs(drawings) do
-        if tracer then tracer:Remove() end
-    end
-    drawings = {}
-    
-    for _, hl in pairs(highlights) do
-        if hl then hl:Destroy() end
-    end
-    highlights = {}
-    
-    print("👁️ ESP System Desativado")
+    print("👁️ ESP Completo Iniciado (Murderer / Sheriff / Hero / Innocent)")
 end
 
 return ESP
