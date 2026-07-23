@@ -1,5 +1,5 @@
 -- =============================================
--- AUTO FARM COINS - Versão Personalizada
+-- AUTO FARM MM2 - Stay Away Separado
 -- =============================================
 
 local Players = game:GetService("Players")
@@ -15,22 +15,22 @@ local isRunning = false
 local farmingThread = nil
 
 local settings = {
-    Mode = "Nearest",      -- Nearest, Random, StayAway
-    Speed = 18,
-    AutoReset = true,
+    Enabled = false,
+    Mode = "Nearest",           -- Nearest, Random
+    Speed = 19,
+    StayAwayMurderer = false,   -- Toggle separado
     FlingWhenFull = true,
+    ResetWhenFull = true,
     AntiFling = true,
     AntiAFK = true,
     MaxCoins = 40
 }
 
 local visitedCoins = {}
-local lastReset = 0
 local coinsCollected = 0
+local lastReset = 0
 
 local mapPaths = {"IceCastle","SkiLodge","Station","LogCabin","Bank2","BioLab","House2","Factory","Hospital3","Hotel","Mansion2","MilBase","Office3","PoliceStation","Workplace","ResearchFacility","ChristmasItaly"}
-
--- ==================== FUNÇÕES INTERNAS ====================
 
 local function getHRP()
     local char = LocalPlayer.Character
@@ -71,7 +71,6 @@ end
 local function findNearestCoin()
     local root = getHRP()
     if not root then return nil end
-
     local nearest, shortest = nil, math.huge
     for _, coin in ipairs(getAllCoins()) do
         local dist = (root.Position - coin.Position).Magnitude
@@ -85,24 +84,22 @@ end
 
 local function findRandomCoin()
     local coins = getAllCoins()
-    if #coins == 0 then return nil end
-    return coins[math.random(1, #coins)]
+    return #coins > 0 and coins[math.random(1, #coins)] or nil
 end
 
 local function stayAwayFromMurderer()
     local root = getHRP()
-    local murderer = findMurderer()
-    if not root or not murderer or not murderer.Character then return end
-
-    local murRoot = murderer.Character:FindFirstChild("HumanoidRootPart")
+    local mur = findMurderer()
+    if not root or not mur or not mur.Character then return end
+    
+    local murRoot = mur.Character:FindFirstChild("HumanoidRootPart")
     if murRoot then
         local direction = (root.Position - murRoot.Position).Unit
-        root.CFrame = CFrame.new(root.Position + direction * 40)
+        root.CFrame = CFrame.new(root.Position + direction * 42)
     end
 end
 
 -- ==================== ANTI FLING & ANTI AFK ====================
-
 local antiFlingConn = nil
 function AutoFarm.ToggleAntiFling(state)
     settings.AntiFling = state
@@ -124,7 +121,7 @@ function AutoFarm.ToggleAntiAFK(state)
     if state then
         antiAFKConn = task.spawn(function()
             while settings.AntiAFK do
-                task.wait(150)
+                task.wait(140)
                 pcall(function()
                     local vu = game:GetService("VirtualUser")
                     vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
@@ -138,21 +135,21 @@ function AutoFarm.ToggleAntiAFK(state)
     end
 end
 
--- ==================== MAIN LOOP ====================
-
+-- ==================== MAIN FARM ====================
 function AutoFarm.Start()
     if isRunning then return end
     isRunning = true
     visitedCoins = {}
     coinsCollected = 0
 
-    print("🟢 Auto Farm Iniciado | Max Coins = 40")
+    print("🟢 Auto Farm Iniciado | Max 40 Coins")
 
     farmingThread = RunService.Heartbeat:Connect(function()
         local root = getHRP()
         if not root then return end
 
-        if settings.Mode == "StayAway" then
+        -- Stay Away (separado)
+        if settings.StayAwayMurderer then
             stayAwayFromMurderer()
         end
 
@@ -176,15 +173,15 @@ function AutoFarm.Start()
         coinsCollected += 1
 
         -- Reset quando bolsa cheia (40)
-        if settings.AutoReset and coinsCollected >= settings.MaxCoins and tick() - lastReset > 5 then
+        if settings.ResetWhenFull and coinsCollected >= settings.MaxCoins and tick() - lastReset > 5 then
             if settings.FlingWhenFull then
                 local mur = findMurderer()
                 if mur and mur.Character then
                     local murRoot = mur.Character:FindFirstChild("HumanoidRootPart")
                     if murRoot then
                         local bv = Instance.new("BodyVelocity")
-                        bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-                        bv.Velocity = murRoot.CFrame.LookVector * 200 + Vector3.new(0, 80, 0)
+                        bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+                        bv.Velocity = murRoot.CFrame.LookVector * 200 + Vector3.new(0, 90, 0)
                         bv.Parent = murRoot
                         game.Debris:AddItem(bv, 2)
                     end
@@ -201,29 +198,16 @@ end
 
 function AutoFarm.Stop()
     isRunning = false
-    if farmingThread then
-        farmingThread:Disconnect()
-        farmingThread = nil
-    end
+    if farmingThread then farmingThread:Disconnect() end
     visitedCoins = {}
     coinsCollected = 0
-    print("🔴 Auto Farm Parado")
 end
 
-function AutoFarm.SetMode(mode)
-    settings.Mode = mode
-end
-
-function AutoFarm.SetSpeed(speed)
-    settings.Speed = math.clamp(speed, 5, 20)
-end
-
-function AutoFarm.SetAutoReset(state)
-    settings.AutoReset = state
-end
-
-function AutoFarm.SetFlingWhenFull(state)
-    settings.FlingWhenFull = state
-end
+-- Setters
+function AutoFarm.SetMode(mode) settings.Mode = mode end
+function AutoFarm.SetSpeed(speed) settings.Speed = math.clamp(speed, 5, 20) end
+function AutoFarm.SetStayAway(state) settings.StayAwayMurderer = state end
+function AutoFarm.SetFlingWhenFull(state) settings.FlingWhenFull = state end
+function AutoFarm.SetResetWhenFull(state) settings.ResetWhenFull = state end
 
 return AutoFarm
