@@ -1,0 +1,98 @@
+-- =============================================
+-- AUTO THROW KNIFE - Joga no Mais Próximo
+-- =============================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local AutoKnife = {}
+local enabled = false
+local connection = nil
+
+local function findNearestPlayer()
+    local myChar = LocalPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
+    
+    local myRoot = myChar.HumanoidRootPart
+    local nearest, shortest = nil, math.huge
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local targetRoot = plr.Character.HumanoidRootPart
+            local dist = (myRoot.Position - targetRoot.Position).Magnitude
+            
+            if dist < shortest and dist < 250 then  -- limite de distância
+                shortest = dist
+                nearest = plr
+            end
+        end
+    end
+    return nearest
+end
+
+local function equipKnife()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    
+    -- Já tem faca equipada
+    if char:FindFirstChild("Knife") then return true end
+    
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack and backpack:FindFirstChild("Knife") then
+        backpack.Knife.Parent = char
+        return true
+    end
+    return false
+end
+
+function AutoKnife.Toggle(state)
+    enabled = state
+    
+    if enabled then
+        print("🔪 Auto Throw Knife Ativado (Mais Próximo)")
+        
+        connection = RunService.Heartbeat:Connect(function()
+            if not enabled then return end
+            
+            local char = LocalPlayer.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+            
+            if not equipKnife() then return end
+            
+            local target = findNearestPlayer()
+            if not target or not target.Character then return end
+            
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            if not targetRoot then return end
+            
+            local knife = char:FindFirstChild("Knife")
+            if knife then
+                -- Move levemente na direção do alvo antes de jogar
+                local myRoot = char.HumanoidRootPart
+                local direction = (targetRoot.Position - myRoot.Position).Unit
+                
+                myRoot.CFrame = CFrame.new(myRoot.Position, targetRoot.Position)
+                
+                -- Ativa o throw
+                pcall(function()
+                    knife:Activate()
+                end)
+            end
+        end)
+        
+    else
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+        print("🔪 Auto Throw Knife Desativado")
+    end
+end
+
+function AutoKnife.IsEnabled()
+    return enabled
+end
+
+return AutoKnife
