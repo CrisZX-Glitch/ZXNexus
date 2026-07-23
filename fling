@@ -1,5 +1,5 @@
 -- =============================================
--- FLING - MM2 (Fling Murderer / Sheriff / Nearest)
+-- FLING COM ESCOLHA DE PLAYER
 -- =============================================
 
 local Players = game:GetService("Players")
@@ -8,8 +8,7 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local Fling = {}
-local enabled = false
-local flingTarget = "Murderer"  -- Murderer, Sheriff, Nearest
+local isFlinging = false
 local flingConnection = nil
 
 local function getHRP(player)
@@ -19,98 +18,117 @@ local function getHRP(player)
     return nil
 end
 
-local function findMurderer()
+local function flingPlayer(target)
+    if not target or not target.Character then return false end
+    
+    local targetRoot = getHRP(target)
+    if not targetRoot then return false end
+    
+    -- Fling forte
+    local bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(99999, 99999, 99999)
+    bv.Velocity = targetRoot.CFrame.LookVector * 280 + Vector3.new(0, 120, 0)
+    bv.Parent = targetRoot
+    
+    -- Spin
+    local angular = Instance.new("BodyAngularVelocity")
+    angular.MaxTorque = Vector3.new(99999, 99999, 99999)
+    angular.AngularVelocity = Vector3.new(0, 150, 0)
+    angular.Parent = targetRoot
+    
+    game.Debris:AddItem(bv, 2.2)
+    game.Debris:AddItem(angular, 2.2)
+    
+    print("💥 Fling aplicado em: " .. target.Name)
+    return true
+end
+
+-- ==================== FLING POR NOME ====================
+function Fling.ToPlayer(name)
+    local target = Players:FindFirstChild(name)
+    if target then
+        flingPlayer(target)
+    else
+        print("❌ Jogador não encontrado: " .. name)
+    end
+end
+
+-- ==================== FLING RÁPIDO ====================
+function Fling.Murderer()
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer then
             local char = plr.Character
             local bp = plr:FindFirstChild("Backpack")
             if (char and char:FindFirstChild("Knife")) or (bp and bp:FindFirstChild("Knife")) then
-                return plr
+                flingPlayer(plr)
+                return
             end
         end
     end
-    return nil
+    print("❌ Nenhum Murderer encontrado")
 end
 
-local function findSheriff()
+function Fling.Sheriff()
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer then
             local char = plr.Character
             local bp = plr:FindFirstChild("Backpack")
             if (char and char:FindFirstChild("Gun")) or (bp and bp:FindFirstChild("Gun")) then
-                return plr
+                flingPlayer(plr)
+                return
             end
         end
     end
-    return nil
+    print("❌ Nenhum Sheriff encontrado")
 end
 
-local function findNearestPlayer()
+function Fling.Nearest()
     local myRoot = getHRP(LocalPlayer)
-    if not myRoot then return nil end
+    if not myRoot then return end
     
     local nearest, shortest = nil, math.huge
-    
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer then
             local root = getHRP(plr)
             if root then
                 local dist = (myRoot.Position - root.Position).Magnitude
-                if dist < shortest and dist < 300 then
+                if dist < shortest then
                     shortest = dist
                     nearest = plr
                 end
             end
         end
     end
-    return nearest
+    if nearest then
+        flingPlayer(nearest)
+    end
 end
 
-local function flingPlayer(target)
-    if not target or not target.Character then return end
+-- ==================== FLING CONTÍNUO ====================
+function Fling.ToggleContinuous(state, targetType)
+    isFlinging = state
     
-    local targetRoot = getHRP(target)
-    if not targetRoot then return end
-    
-    -- Fling forte
-    local bv = Instance.new("BodyVelocity")
-    bv.Name = "FlingVelocity"
-    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    bv.Velocity = targetRoot.CFrame.LookVector * 250 + Vector3.new(0, 120, 0)
-    bv.Parent = targetRoot
-    
-    game.Debris:AddItem(bv, 2.5)
-    
-    -- Extra spin
-    local angular = Instance.new("BodyAngularVelocity")
-    angular.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    angular.AngularVelocity = Vector3.new(0, 100, 0)
-    angular.Parent = targetRoot
-    game.Debris:AddItem(angular, 2)
-end
-
-function Fling.Toggle(state, targetType)
-    enabled = state
-    flingTarget = targetType or "Murderer"
-    
-    if enabled then
-        print("💥 Fling Ativado | Alvo: " .. flingTarget)
+    if state then
+        print("💥 Fling Contínuo Ativado | Alvo: " .. targetType)
         
         flingConnection = RunService.Heartbeat:Connect(function()
-            if not enabled then return end
+            if not isFlinging then return end
             
             local target = nil
-            if flingTarget == "Murderer" then
-                target = findMurderer()
-            elseif flingTarget == "Sheriff" then
+            if targetType == "Murderer" then
+                target = findMurderer()  -- função interna
+            elseif targetType == "Sheriff" then
                 target = findSheriff()
-            elseif flingTarget == "Nearest" then
-                target = findNearestPlayer()
+            elseif targetType == "Nearest" then
+                -- usa Nearest acima
+                Fling.Nearest()
+                task.wait(1.5)
+                return
             end
             
             if target then
                 flingPlayer(target)
-                task.wait(1.2)  -- cooldown para não spammar
+                task.wait(1.8)
             end
         end)
         
@@ -119,24 +137,19 @@ function Fling.Toggle(state, targetType)
             flingConnection:Disconnect()
             flingConnection = nil
         end
-        print("💥 Fling Desativado")
+        print("💥 Fling Contínuo Desativado")
     end
 end
 
--- Funções rápidas
-function Fling.FlingMurderer()
-    local mur = findMurderer()
-    if mur then flingPlayer(mur) end
-end
-
-function Fling.FlingSheriff()
-    local sheriff = findSheriff()
-    if sheriff then flingPlayer(sheriff) end
-end
-
-function Fling.FlingNearest()
-    local nearest = findNearestPlayer()
-    if nearest then flingPlayer(nearest) end
+-- Lista de players para UI
+function Fling.GetPlayerList()
+    local list = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            table.insert(list, plr.Name)
+        end
+    end
+    return list
 end
 
 return Fling
