@@ -1,0 +1,173 @@
+-- =============================================
+-- ESP + TRACERS + HIGHLIGHTS - MM2
+-- =============================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+local ESP = {}
+
+local enabled = {
+    Names = false,
+    Tracers = false,
+    Highlights = false,
+}
+
+local drawings = {}
+local highlights = {}
+local connections = {}
+
+local function getPlayerRole(player)
+    -- Simples detecção por tool (funciona bem na maioria dos servers)
+    local char = player.Character
+    local bp = player:FindFirstChild("Backpack")
+    
+    if char then
+        if char:FindFirstChild("Knife") then return "Murderer" end
+        if char:FindFirstChild("Gun") then return "Sheriff" end
+    end
+    if bp then
+        if bp:FindFirstChild("Knife") then return "Murderer" end
+        if bp:FindFirstChild("Gun") then return "Sheriff" end
+    end
+    return "Innocent"
+end
+
+local function createTracer(player)
+    if drawings[player] then return end
+    
+    local tracer = Drawing.new("Line")
+    tracer.Thickness = 1.8
+    tracer.Transparency = 1
+    tracer.Visible = false
+    drawings[player] = tracer
+end
+
+local function updateTracers()
+    for player, tracer in pairs(drawings) do
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local root = player.Character.HumanoidRootPart
+            local camera = Workspace.CurrentCamera
+            local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+            
+            if onScreen then
+                local color = Color3.fromRGB(255, 0, 0)
+                local role = getPlayerRole(player)
+                
+                if role == "Murderer" then color = Color3.fromRGB(255, 0, 0)
+                elseif role == "Sheriff" then color = Color3.fromRGB(0, 100, 255)
+                else color = Color3.fromRGB(0, 255, 100) end
+                
+                tracer.Color = color
+                tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+                tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+                tracer.Visible = enabled.Tracers
+            else
+                tracer.Visible = false
+            end
+        else
+            if drawings[player] then
+                drawings[player]:Remove()
+                drawings[player] = nil
+            end
+        end
+    end
+end
+
+local function createHighlight(player)
+    if highlights[player] then return end
+    
+    local char = player.Character
+    if not char then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = char
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0.3
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = char
+    highlights[player] = highlight
+end
+
+local function updateHighlights()
+    for player, hl in pairs(highlights) do
+        if player and player.Character then
+            local role = getPlayerRole(player)
+            if role == "Murderer" then
+                hl.FillColor = Color3.fromRGB(255, 50, 50)
+            elseif role == "Sheriff" then
+                hl.FillColor = Color3.fromRGB(50, 100, 255)
+            else
+                hl.FillColor = Color3.fromRGB(50, 255, 100)
+            end
+            hl.Enabled = enabled.Highlights
+        end
+    end
+end
+
+-- ==================== CONTROLE ====================
+
+function ESP.ToggleNames(state)
+    enabled.Names = state
+    -- (pode adicionar BillboardGui depois se quiser)
+end
+
+function ESP.ToggleTracers(state)
+    enabled.Tracers = state
+end
+
+function ESP.ToggleHighlights(state)
+    enabled.Highlights = state
+end
+
+function ESP.Start()
+    -- Limpa antigo
+    for _, conn in pairs(connections) do conn:Disconnect() end
+    connections = {}
+    
+    -- Tracers
+    table.insert(connections, RunService.RenderStepped:Connect(updateTracers))
+    
+    -- Highlights
+    table.insert(connections, RunService.Heartbeat:Connect(updateHighlights))
+    
+    -- Cria para jogadores existentes
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player \~= LocalPlayer then
+            createTracer(player)
+            createHighlight(player)
+        end
+    end
+    
+    -- Novo jogador
+    Players.PlayerAdded:Connect(function(player)
+        if player ~= LocalPlayer then
+            createTracer(player)
+            createHighlight(player)
+        end
+    end)
+    
+    print("👁️ ESP System Iniciado")
+end
+
+function ESP.Stop()
+    for _, conn in pairs(connections) do conn:Disconnect() end
+    connections = {}
+    
+    for _, tracer in pairs(drawings) do
+        if tracer then tracer:Remove() end
+    end
+    drawings = {}
+    
+    for _, hl in pairs(highlights) do
+        if hl then hl:Destroy() end
+    end
+    highlights = {}
+    
+    print("👁️ ESP System Desativado")
+end
+
+return ESP
